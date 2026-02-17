@@ -22,11 +22,14 @@ class LocalDataRepository:
         default_path = Path(__file__).resolve().parent.parent / "data" / "reference_data.local.json"
         self.data_path = Path(os.getenv("LOCAL_DATA_PATH", str(default_path)))
         self._data: Optional[Dict[str, Any]] = None
+        self._mtime_ns: Optional[int] = None
 
     def _load_data(self) -> Dict[str, Any]:
-        if self._data is None:
+        mtime_ns = self.data_path.stat().st_mtime_ns
+        if self._data is None or self._mtime_ns != mtime_ns:
             with self.data_path.open("r", encoding="utf-8") as f:
                 self._data = json.load(f)
+            self._mtime_ns = mtime_ns
         return self._data
 
     def invalidate_cache(self, sheet_name: Optional[str] = None):
