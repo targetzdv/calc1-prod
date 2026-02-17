@@ -39,9 +39,9 @@ class CalculatorRequest(BaseModel):
         description="Количество (кг/шт)"
     )
 
-    container_size: Literal["20ft", "40ft", "40ftHC"] = Field(
+    container_size: Literal["20ft", "40ft"] = Field(
         ...,
-        description="Размер контейнера"
+        description="Размер контейнера (20ft или 40ft)"
     )
 
     price_per_kg: float = Field(

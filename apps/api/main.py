@@ -71,7 +71,7 @@ async def calculate(request: CalculatorRequest) -> CalculatorResponse:
     - **city_to**: Пункт назначения
     - **railway_station**: ЖД станция (опционально)
     - **quantity**: Количество
-    - **container_size**: Размер контейнера (20ft, 40ft, 40ftHC)
+    - **container_size**: Размер контейнера (20ft, 40ft)
     - **price_per_kg**: Цена за кг
     """
     calculator = CALCULATORS.get(request.calculator_type)

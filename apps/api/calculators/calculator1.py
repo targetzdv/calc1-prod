@@ -55,8 +55,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
 
     # Фрахт
     freight_data = all_data['freight']
-    # Обрабатываем 40ftHC как 40 (в Sheets только 20 и 40)
-    container_size_num = '40' if '40' in request.container_size else '20'
+    container_size_num = '40' if request.container_size == '40ft' else '20'
 
     freight = next(
         (f for f in freight_data

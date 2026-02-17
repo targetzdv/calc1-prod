@@ -182,9 +182,10 @@ class SheetsRepository:
 
                 # max_val может быть None для диапазона "от X и выше"
                 if min_val is not None and fee is not None:
-                    # Если max пустой, используем очень большое число для проверки
+                    # Если max пустой, используем большое конечное число:
+                    # JSON не сериализует float('inf') в стандартном режиме.
                     if max_val is None:
-                        max_val = float('inf')
+                        max_val = 10**18
                     fees.append({
                         'min': min_val,
                         'max': max_val,
