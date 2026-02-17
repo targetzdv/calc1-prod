@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from models.CalculatorRequest import CalculatorRequest
 from models.CalculatorResponse import CalculatorResponse
 from calculators import CALCULATORS
-from repositories.sheets_repo import sheets_repo
+from repositories.data_repo import reference_data_repo
 
 app = FastAPI(
     title="Calculator API",
@@ -96,70 +96,70 @@ async def calculate(request: CalculatorRequest) -> CalculatorResponse:
 @app.get("/data/materials")
 async def get_materials():
     """Получить список материалов"""
-    materials = sheets_repo.get_materials()
+    materials = reference_data_repo.get_materials()
     return {"data": materials}
 
 
 @app.get("/data/parameters")
 async def get_parameters():
     """Получить параметры (курсы валют)"""
-    parameters = sheets_repo.get_parameters()
+    parameters = reference_data_repo.get_parameters()
     return {"data": parameters}
 
 
 @app.get("/data/freight")
 async def get_freight():
     """Получить данные по фрахту"""
-    freight = sheets_repo.get_freight()
+    freight = reference_data_repo.get_freight()
     return {"data": freight}
 
 
 @app.get("/data/customs-fees")
 async def get_customs_fees():
     """Получить таможенные сборы по диапазонам"""
-    fees = sheets_repo.get_customs_fees()
+    fees = reference_data_repo.get_customs_fees()
     return {"data": fees}
 
 
 @app.get("/data/city-port-map")
 async def get_city_port_map():
     """Получить маппинг город → порт"""
-    city_port = sheets_repo.get_city_port_map()
+    city_port = reference_data_repo.get_city_port_map()
     return {"data": city_port}
 
 
 @app.get("/data/car-delivery")
 async def get_car_delivery():
     """Получить данные по доставке авто"""
-    delivery = sheets_repo.get_car_delivery()
+    delivery = reference_data_repo.get_car_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/railway-delivery")
 async def get_railway_delivery():
     """Получить данные по доставке ЖД от порта"""
-    delivery = sheets_repo.get_railway_delivery()
+    delivery = reference_data_repo.get_railway_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/railway-car-delivery")
 async def get_railway_car_delivery():
     """Получить данные по доставке ЖД+авто от станции"""
-    delivery = sheets_repo.get_railway_car_delivery()
+    delivery = reference_data_repo.get_railway_car_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/all")
 async def get_all_data():
     """Получить все справочные данные"""
-    data = sheets_repo.get_all_data()
+    data = reference_data_repo.get_all_data()
     return {"data": data}
 
 
 @app.post("/cache/invalidate")
 async def invalidate_cache(sheet_name: str = None):
     """Очистить кэш для листа или всех листов"""
-    sheets_repo.invalidate_cache(sheet_name)
+    reference_data_repo.invalidate_cache(sheet_name)
     if sheet_name:
         return {"message": f"Кэш для листа '{sheet_name}' очищен"}
     return {"message": "Кэш всех листов очищен"}

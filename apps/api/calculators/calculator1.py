@@ -1,7 +1,7 @@
 from typing import Optional
 from models.CalculatorRequest import CalculatorRequest
 from models.CalculatorResponse import CalculatorResponse
-from repositories.sheets_repo import sheets_repo
+from repositories.data_repo import reference_data_repo
 
 
 def format_number(value: float, decimals: int = 2) -> str:
@@ -14,7 +14,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
     Калькулятор 1 - расчёт себестоимости поставки
     """
     # === 1. Получение справочных данных ===
-    all_data = sheets_repo.get_all_data()
+    all_data = reference_data_repo.get_all_data()
 
     # Параметры
     params = all_data['parameters']

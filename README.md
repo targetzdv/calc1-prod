@@ -6,7 +6,7 @@
 
 - **Frontend**: Next.js (React), TypeScript, MUI, react-hook-form, Zod
 - **Backend**: FastAPI, Python 3.11+, Pydantic
-- **Хранение данных**: Google Sheets (справочники), Redis (кэш)
+- **Хранение данных**: Local JSON / Google Sheets (справочники), Redis (кэш)
 - **Оркестрация**: Docker Compose
 
 ## Запуск проекта
@@ -14,21 +14,29 @@
 ### Предварительные требования
 
 1. Docker и Docker Compose
-2. Google Sheet ID и credentials.json для доступа к Google Sheets API
+2. Для режима `sheets` нужен Google Sheet ID и credentials.json
 
 ### Установка
 
 1. Создайте файл `.env` в корне проекта:
    ```
+   REFERENCE_DATA_SOURCE=local
+   LOCAL_DATA_PATH=/app/data/reference_data.local.json
    GOOGLE_SHEET_ID=your_sheet_id
    ```
 
-2. Разместите `credentials.json` в папке `apps/api/` (Service Account Google Sheets)
+2. Если используете `REFERENCE_DATA_SOURCE=sheets` или `auto`, разместите `credentials.json` в папке `apps/api/` (Service Account Google Sheets)
 
 3. Запустите контейнеры:
    ```bash
    docker-compose up --build
    ```
+
+### Режимы источника данных
+
+- `local` - только локальный файл `apps/api/data/reference_data.local.json` (рекомендуется для стабильного прода без зависимости от Google API)
+- `sheets` - только Google Sheets
+- `auto` - сначала Google Sheets, при ошибке fallback на локальный JSON
 
 ### Доступ к сервисам
 
