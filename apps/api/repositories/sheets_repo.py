@@ -180,7 +180,11 @@ class SheetsRepository:
                 max_val = self._parse_number(row[1], is_percentage=False)
                 fee = self._parse_number(row[2], is_percentage=False)
 
-                if min_val is not None and max_val is not None and fee is not None:
+                # max_val может быть None для диапазона "от X и выше"
+                if min_val is not None and fee is not None:
+                    # Если max пустой, используем очень большое число для проверки
+                    if max_val is None:
+                        max_val = float('inf')
                     fees.append({
                         'min': min_val,
                         'max': max_val,

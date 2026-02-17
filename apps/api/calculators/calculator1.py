@@ -95,9 +95,8 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
         # PMMA: количество (кг) × ставка EUR/кг × курс EUR→RUB
         duty_rub = request.quantity * duty_rate * course_eur_to_rub
     else:
-        # Обычные материалы: таможенная стоимость × (duty / 100)
-        # duty уже в десятичном формате (0.065 = 6.5%), но для формулы нужно в процентах
-        duty_rub = customs_value_rub * (duty_rate / 100.0)
+        # Обычные материалы: таможенная стоимость × duty (уже в десятичном формате 0.065 = 6.5%)
+        duty_rub = customs_value_rub * duty_rate
 
     # 6. Таможенный сбор (RUB) - по диапазону
     customs_fees = all_data['customs_fees']
