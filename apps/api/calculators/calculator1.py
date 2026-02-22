@@ -10,7 +10,10 @@ def format_number(value: float, decimals: int = 2) -> str:
 
 
 def get_china_port_info(selected_port: str, port_cities: list[dict]) -> dict:
-    """Собирает регионы и города по выбранному китайскому порту через contains."""
+    """Собирает регионы и города по выбранному китайскому порту.
+
+    Матчинг выполняется по столбцу `china_port_reg` (пункт 4 формы).
+    """
     selected = selected_port.strip().lower()
     if not selected or not port_cities:
         return {
@@ -21,9 +24,9 @@ def get_china_port_info(selected_port: str, port_cities: list[dict]) -> dict:
 
     matched_rows = []
     for row in port_cities:
-        row_port = str(row.get("china_port", "")).strip()
+        row_port = str(row.get("china_port_reg", "")).strip()
         row_port_normalized = row_port.lower()
-        if selected in row_port_normalized or row_port_normalized in selected:
+        if selected == row_port_normalized:
             matched_rows.append(row)
 
     if not matched_rows:
@@ -33,7 +36,7 @@ def get_china_port_info(selected_port: str, port_cities: list[dict]) -> dict:
             "regions": [],
         }
 
-    matched_port = str(matched_rows[0].get("china_port", selected_port))
+    matched_port = str(matched_rows[0].get("china_port1", selected_port))
     regions_map: dict[str, list[str]] = {}
     for row in matched_rows:
         region = str(row.get("region", "")).strip()

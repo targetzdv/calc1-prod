@@ -340,27 +340,44 @@ class SheetsRepository:
         return delivery
 
     def get_china_port_cities(self) -> List[Dict[str, str]]:
-        """Получить регионы и ближайшие города по китайскому порту"""
+        """Получить регионы и ближайшие города по китайскому порту.
+
+        Ожидаемая структура листа `china_port_final`:
+        - china_port_reg
+        - china_port1
+        - Region
+        - city_china
+        """
         values = self._get_data_with_cache('china_port_final')
 
         if not values:
             return []
 
+        header = [str(cell).strip().lower() for cell in values[0]]
         data = values[1:]
         port_cities: List[Dict[str, str]] = []
 
-        for row in data:
-            if len(row) >= 3:
-                china_port = row[0].strip()
-                region = row[1].strip()
-                city_china = row[2].strip()
+        idx_port_reg = header.index('china_port_reg') if 'china_port_reg' in header else 0
+        idx_port1 = header.index('china_port1') if 'china_port1' in header else 1
+        idx_region = header.index('region') if 'region' in header else 2
+        idx_city = header.index('city_china') if 'city_china' in header else 3
 
-                if china_port and region and city_china:
-                    port_cities.append({
-                        'china_port': china_port,
-                        'region': region,
-                        'city_china': city_china,
-                    })
+        for row in data:
+            def get_col(index: int) -> str:
+                return str(row[index]).strip() if len(row) > index else ""
+
+            china_port_reg = get_col(idx_port_reg)
+            china_port1 = get_col(idx_port1)
+            region = get_col(idx_region)
+            city_china = get_col(idx_city)
+
+            if china_port_reg and china_port1 and region and city_china:
+                port_cities.append({
+                    'china_port_reg': china_port_reg,
+                    'china_port1': china_port1,
+                    'region': region,
+                    'city_china': city_china,
+                })
 
         return port_cities
 
