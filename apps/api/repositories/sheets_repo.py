@@ -3,12 +3,15 @@ Google Sheets repository с кэшированием через Redis
 """
 import os
 import json
+import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional
-from decimal import Decimal
 import redis
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+
+logger = logging.getLogger(__name__)
 
 
 class SheetsRepository:
@@ -17,22 +20,84 @@ class SheetsRepository:
     def __init__(self):
         self.sheet_id = os.getenv('GOOGLE_SHEET_ID')
         self.redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-        self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
+        self.redis_client = None
+        try:
+            self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
+        except Exception as error:
+            logger.warning("Redis disabled: failed to init client (%s)", error)
         self.service = None
 
         # TTL кэша в секундах (1 час)
         self.cache_ttl = 3600
 
+    def _resolve_credentials_path(self) -> str:
+        """Resolve credentials path for both docker and local runs."""
+        env_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+        if env_path:
+            return env_path
+
+        candidate_paths = [
+            Path("/app/credentials.json"),
+            Path(__file__).resolve().parent.parent / "credentials.json",
+        ]
+        for path in candidate_paths:
+            if path.exists():
+                return str(path)
+
+        # Keep deterministic fallback for explicit error message.
+        return str(candidate_paths[0])
+
     def _get_service(self):
         """Получить Google Sheets service (lazy init)"""
         if self.service is None:
-            credentials_path = os.getenv('GOOGLE_CREDENTIALS_PATH', '/app/credentials.json')
+            if not self.sheet_id:
+                raise RuntimeError("GOOGLE_SHEET_ID is not set")
+
+            credentials_path = self._resolve_credentials_path()
             credentials = Credentials.from_service_account_file(
                 credentials_path,
                 scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
             )
             self.service = build('sheets', 'v4', credentials=credentials)
         return self.service
+
+    def _cache_get(self, key: str) -> Optional[str]:
+        if self.redis_client is None:
+            return None
+        try:
+            return self.redis_client.get(key)
+        except Exception as error:
+            logger.warning("Redis read failed for key '%s': %s", key, error)
+            self.redis_client = None
+            return None
+
+    def _cache_setex(self, key: str, ttl: int, value: str):
+        if self.redis_client is None:
+            return
+        try:
+            self.redis_client.setex(key, ttl, value)
+        except Exception as error:
+            logger.warning("Redis write failed for key '%s': %s", key, error)
+            self.redis_client = None
+
+    def _cache_delete(self, *keys: str):
+        if self.redis_client is None or not keys:
+            return
+        try:
+            self.redis_client.delete(*keys)
+        except Exception as error:
+            logger.warning("Redis delete failed for keys %s: %s", keys, error)
+            self.redis_client = None
+
+    def _cache_keys(self, pattern: str) -> List[str]:
+        if self.redis_client is None:
+            return []
+        try:
+            return self.redis_client.keys(pattern)
+        except Exception as error:
+            logger.warning("Redis keys failed for pattern '%s': %s", pattern, error)
+            self.redis_client = None
+            return []
 
     def _get_cache_key(self, sheet_name: str) -> str:
         """Сгенерировать ключ кэша для листа"""
@@ -66,7 +131,7 @@ class SheetsRepository:
         cache_key = self._get_cache_key(sheet_name)
 
         # Проверяем кэш
-        cached = self.redis_client.get(cache_key)
+        cached = self._cache_get(cache_key)
         if cached:
             return json.loads(cached)
 
@@ -84,7 +149,7 @@ class SheetsRepository:
 
         # Сохраняем в кэш
         if values:
-            self.redis_client.setex(cache_key, self.cache_ttl, json.dumps(values))
+            self._cache_setex(cache_key, self.cache_ttl, json.dumps(values))
 
         return values
 
@@ -92,12 +157,12 @@ class SheetsRepository:
         """Очистить кэш для листа или всех листов"""
         if sheet_name:
             cache_key = self._get_cache_key(sheet_name)
-            self.redis_client.delete(cache_key)
+            self._cache_delete(cache_key)
         else:
             # Очистить все ключи sheets:*
-            keys = self.redis_client.keys('sheets:*')
+            keys = self._cache_keys('sheets:*')
             if keys:
-                self.redis_client.delete(*keys)
+                self._cache_delete(*keys)
 
     # === Методы для получения справочников ===
 

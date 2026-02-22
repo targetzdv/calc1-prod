@@ -10,7 +10,11 @@ services:
       - API_PROXY_TARGET=http://api:8000
     depends_on:
       - api
-    restart: unless-stopped
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
 
   api:
     build:
@@ -26,7 +30,9 @@ services:
       - REFERENCE_DATA_SOURCE=sheets
     depends_on:
       - redis
-    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   redis:
     image: redis:7-alpine
@@ -34,7 +40,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: unless-stopped
 
 volumes:
   redis_data:

@@ -68,7 +68,10 @@ class ReferenceDataRepository:
     """Facade over sheets/local sources."""
 
     def __init__(self):
-        self.mode = os.getenv("REFERENCE_DATA_SOURCE", "local").strip().lower()
+        self.mode = os.getenv("REFERENCE_DATA_SOURCE", "sheets").strip().lower()
+        if self.mode not in {"local", "sheets", "auto"}:
+            logger.warning("Unknown REFERENCE_DATA_SOURCE='%s', fallback to 'sheets'", self.mode)
+            self.mode = "sheets"
         self.local_repo = LocalDataRepository()
         self.sheets_repo = SheetsRepository()
 

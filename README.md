@@ -20,21 +20,26 @@
 
 1. Создайте файл `.env` в корне проекта:
    ```
-   REFERENCE_DATA_SOURCE=local
+   REFERENCE_DATA_SOURCE=sheets
    LOCAL_DATA_PATH=/app/data/reference_data.local.json
    GOOGLE_SHEET_ID=your_sheet_id
    ```
 
 2. Если используете `REFERENCE_DATA_SOURCE=sheets` или `auto`, разместите `credentials.json` в папке `apps/api/` (Service Account Google Sheets)
 
-3. Запустите контейнеры:
+3. Запустите контейнеры в production-режиме:
    ```bash
    docker-compose up --build
    ```
 
+4. Для локальной разработки с hot-reload используйте отдельный compose-файл:
+   ```bash
+   docker compose -f docker-compose.dev.yml up --build
+   ```
+
 ### Режимы источника данных
 
-- `local` - только локальный файл `apps/api/data/reference_data.local.json` (рекомендуется для стабильного прода без зависимости от Google API)
+- `local` - только локальный файл `apps/api/data/reference_data.local.json`
 - `sheets` - только Google Sheets
 - `auto` - сначала Google Sheets, при ошибке fallback на локальный JSON
 
@@ -55,6 +60,11 @@
 ├── docker-compose.yml
 └── README.md
 ```
+
+## Production vs Development
+
+- `docker-compose.yml` - production режим (без Next.js HMR и без `uvicorn --reload`)
+- `docker-compose.dev.yml` - development режим (с HMR/auto-reload)
 
 ## Разработка
 

@@ -1,12 +1,20 @@
+import os
+from pathlib import Path
+
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from dotenv import load_dotenv
 
 from models.CalculatorRequest import CalculatorRequest
 from models.CalculatorResponse import CalculatorResponse
 from calculators import CALCULATORS
 from repositories.data_repo import reference_data_repo
+
+# Load project-level .env for local runs outside docker-compose.
+env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(env_path, override=False)
 
 app = FastAPI(
     title="Calculator API",
@@ -14,10 +22,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS origins for local/dev usage (localhost + 127.0.0.1 on any port)
+default_cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+extra_cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+extra_cors_origins = [origin.strip() for origin in extra_cors_origins_raw.split(",") if origin.strip()]
+allowed_cors_origins = list(dict.fromkeys(default_cors_origins + extra_cors_origins))
+allow_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX", r"https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_cors_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
