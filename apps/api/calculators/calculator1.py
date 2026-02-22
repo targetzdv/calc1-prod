@@ -9,6 +9,49 @@ def format_number(value: float, decimals: int = 2) -> str:
     return f"{value:,.{decimals}f}"
 
 
+def get_china_port_info(selected_port: str, port_cities: list[dict]) -> dict:
+    """Собирает регионы и города по выбранному китайскому порту через contains."""
+    selected = selected_port.strip().lower()
+    if not selected or not port_cities:
+        return {
+            "selected_port": selected_port,
+            "matched_port": selected_port,
+            "regions": [],
+        }
+
+    matched_rows = []
+    for row in port_cities:
+        row_port = str(row.get("china_port", "")).strip()
+        row_port_normalized = row_port.lower()
+        if selected in row_port_normalized or row_port_normalized in selected:
+            matched_rows.append(row)
+
+    if not matched_rows:
+        return {
+            "selected_port": selected_port,
+            "matched_port": selected_port,
+            "regions": [],
+        }
+
+    matched_port = str(matched_rows[0].get("china_port", selected_port))
+    regions_map: dict[str, list[str]] = {}
+    for row in matched_rows:
+        region = str(row.get("region", "")).strip()
+        city = str(row.get("city_china", "")).strip()
+        if not region or not city:
+            continue
+        regions_map.setdefault(region, [])
+        if city not in regions_map[region]:
+            regions_map[region].append(city)
+
+    regions = [{"name": region, "cities": cities} for region, cities in regions_map.items()]
+    return {
+        "selected_port": selected_port,
+        "matched_port": matched_port,
+        "regions": regions,
+    }
+
+
 def calculate(request: CalculatorRequest) -> CalculatorResponse:
     """
     Калькулятор 1 - расчёт себестоимости поставки
@@ -229,6 +272,10 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
             "railway_car_rub": railway_car_rub if 'railway_car_rub' in locals() else 0.0,
             "railway_station_used": railway_station_used if 'railway_station_used' in locals() else "",
         },
+        "china_port_info": get_china_port_info(
+            request.port_from,
+            all_data.get("china_port_cities", []),
+        ),
         "result": {
             "total_cost_rub": total_cost_rub,
             "cost_per_kg": cost_per_kg,

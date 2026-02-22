@@ -12,6 +12,8 @@ interface ResultBlockProps {
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
 const asNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -141,6 +143,7 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
   const rawData = asRecord(calculation.raw_data);
   const input = asRecord(rawData.input);
   const intermediate = asRecord(rawData.intermediate);
+  const chinaPortInfo = asRecord(rawData.china_port_info);
   const result = asRecord(rawData.result);
 
   const material = asText(input.material);
@@ -204,6 +207,15 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
   const totalCostText = formatMoney(totalCost);
   const costPerKgText = costPerKg !== null ? `${formatMoney(costPerKg)} / кг` : "-";
 
+  const matchedChinaPort = asText(chinaPortInfo.matched_port);
+  const chinaPortRegions = asArray(chinaPortInfo.regions)
+    .map((item) => asRecord(item))
+    .map((item) => ({
+      name: asText(item.name),
+      cities: asArray(item.cities).map((city) => asText(city)).filter((city) => city !== "-"),
+    }))
+    .filter((item) => item.name !== "-" && item.cities.length > 0);
+
   const copyPayload = [
     "Результат расчёта",
     "",
@@ -214,6 +226,15 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
     ...(stepRows.length > 0
       ? stepRows.map((row, index) => `${index + 1}. ${row.label}: ${row.value}`)
       : ["Для этого калькулятора детальные этапы пока не доступны."]),
+    "",
+    "Города по китайскому порту:",
+    `Выбранный порт: "${matchedChinaPort}"`,
+    ...(chinaPortRegions.length > 0
+      ? chinaPortRegions.flatMap((region, index) => [
+          `${index + 1}. Регион: ${region.name}`,
+          `   Ближайшие города: ${region.cities.join(", ")}`,
+        ])
+      : ["Данные по выбранному порту не найдены."]),
     "",
     `Полная себестоимость: ${totalCostText}`,
     `Себестоимость за 1 кг: ${costPerKgText}`,
@@ -292,6 +313,43 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
       </Typography>
 
       <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 2.5,
+              border: "1px solid rgba(190,210,235,0.24)",
+              backgroundColor: "rgba(140,176,232,0.06)",
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
+              Города по китайскому порту
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Выбранный порт: <strong>"{matchedChinaPort}"</strong>
+            </Typography>
+
+            {chinaPortRegions.length > 0 ? (
+              <Box sx={{ display: "grid", gap: 1.4 }}>
+                {chinaPortRegions.map((region) => (
+                  <Box key={region.name}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Регион: {region.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Ближайшие города: {region.cities.join(", ")}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Данные по выбранному порту не найдены в листе china_port_final.
+              </Typography>
+            )}
+          </Box>
+        </Grid>
+
         <Grid size={{ xs: 12 }}>
           <Box
             sx={{

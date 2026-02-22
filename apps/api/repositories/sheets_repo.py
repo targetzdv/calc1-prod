@@ -339,6 +339,31 @@ class SheetsRepository:
 
         return delivery
 
+    def get_china_port_cities(self) -> List[Dict[str, str]]:
+        """Получить регионы и ближайшие города по китайскому порту"""
+        values = self._get_data_with_cache('china_port_final')
+
+        if not values:
+            return []
+
+        data = values[1:]
+        port_cities: List[Dict[str, str]] = []
+
+        for row in data:
+            if len(row) >= 3:
+                china_port = row[0].strip()
+                region = row[1].strip()
+                city_china = row[2].strip()
+
+                if china_port and region and city_china:
+                    port_cities.append({
+                        'china_port': china_port,
+                        'region': region,
+                        'city_china': city_china,
+                    })
+
+        return port_cities
+
     def get_all_data(self) -> Dict[str, Any]:
         """Получить все справочные данные"""
         return {
@@ -350,6 +375,7 @@ class SheetsRepository:
             'car_delivery': self.get_car_delivery(),
             'railway_delivery': self.get_railway_delivery(),
             'railway_car_delivery': self.get_railway_car_delivery(),
+            'china_port_cities': self.get_china_port_cities(),
         }
 
 

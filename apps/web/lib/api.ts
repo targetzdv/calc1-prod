@@ -111,6 +111,12 @@ export interface RailwayCarDeliveryReference {
   price: number;
 }
 
+export interface ChinaPortCityReference {
+  china_port: string;
+  region: string;
+  city_china: string;
+}
+
 export interface ReferenceData {
   materials: MaterialReference[];
   parameters: Record<string, number>;
@@ -120,6 +126,7 @@ export interface ReferenceData {
   car_delivery: CarDeliveryReference[];
   railway_delivery: RailwayDeliveryReference[];
   railway_car_delivery: RailwayCarDeliveryReference[];
+  china_port_cities: ChinaPortCityReference[];
 }
 
 export async function calculate(request: CalculatorRequest): Promise<CalculatorResponse> {
