@@ -204,44 +204,46 @@ const theme = createTheme({
 
 export function ThemeRegistry({ children }: { children: React.ReactNode }) {
   const [{ cache, flush }] = useState(() => {
-    const cache = createCache({ key: "mui", prepend: true });
-    cache.compat = true;
+    const emotionCache = createCache({ key: "mui" });
+    emotionCache.compat = true;
 
-    const inserted: string[] = [];
-    const prevInsert = cache.insert;
+    const previousInsert = emotionCache.insert;
+    let inserted: string[] = [];
 
-    cache.insert = (...args) => {
-      const serialized = args[1];
-      if (cache.inserted[serialized.name] === undefined) {
+    emotionCache.insert = (...args: Parameters<typeof previousInsert>) => {
+      const serialized = args[1] as { name: string };
+
+      if (emotionCache.inserted[serialized.name] === undefined) {
         inserted.push(serialized.name);
       }
 
-      return prevInsert(...args);
+      return previousInsert(...args);
     };
 
-    const flush = () => {
-      const prevInserted = [...inserted];
-      inserted.length = 0;
+    const flushInserted = () => {
+      const prevInserted = inserted;
+      inserted = [];
       return prevInserted;
     };
 
-    return { cache, flush };
+    return { cache: emotionCache, flush: flushInserted };
   });
 
   useServerInsertedHTML(() => {
-    const names = flush();
-    if (names.length === 0) {
+    const insertedNames = flush();
+
+    if (insertedNames.length === 0) {
       return null;
     }
 
     let styles = "";
-    for (const name of names) {
+    for (const name of insertedNames) {
       styles += cache.inserted[name];
     }
 
     return (
       <style
-        data-emotion={`${cache.key} ${names.join(" ")}`}
+        data-emotion={`${cache.key} ${insertedNames.join(" ")}`}
         dangerouslySetInnerHTML={{ __html: styles }}
       />
     );

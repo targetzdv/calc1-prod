@@ -1,20 +1,26 @@
-import os
+from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from dotenv import load_dotenv
+
+# Загружаем .env до инициализации репозиториев, чтобы GOOGLE_SHEET_ID
+# и другие переменные были доступны на этапе импорта.
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_ENV_FILE = BASE_DIR.parent.parent / ".env"
+if ROOT_ENV_FILE.exists():
+    load_dotenv(ROOT_ENV_FILE)
+else:
+    load_dotenv()
 
 from models.CalculatorRequest import CalculatorRequest
 from models.CalculatorResponse import CalculatorResponse
 from calculators import CALCULATORS
-from repositories.data_repo import reference_data_repo
-
-# Load project-level .env for local runs outside docker-compose.
-env_path = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(env_path, override=False)
+from repositories.sheets_repo import sheets_repo
+from repositories.currency_repo import currency_repo
 
 app = FastAPI(
     title="Calculator API",
@@ -22,21 +28,68 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS origins for local/dev usage (localhost + 127.0.0.1 on any port)
-default_cors_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-extra_cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
-extra_cors_origins = [origin.strip() for origin in extra_cors_origins_raw.split(",") if origin.strip()]
-allowed_cors_origins = list(dict.fromkeys(default_cors_origins + extra_cors_origins))
-allow_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX", r"https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+
+def _safe_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_rate(params: dict, aliases: tuple[str, ...]):
+    for alias in aliases:
+        value = _safe_float(params.get(alias))
+        if value is not None and value > 0:
+            return value
+    return None
+
+
+def _build_fallback_currency_payload(params: dict, days: int):
+    usd = _find_rate(params, ("course_usd_to_rub", "usd_to_rub", "usd"))
+    eur = _find_rate(params, ("course_eur_to_rub", "eur_to_rub", "eur"))
+    cny = _find_rate(params, ("course_cny_to_rub", "cny_to_rub", "yuan_to_rub", "cny", "yuan"))
+
+    mapping = (
+        ("USD", "US Dollar", usd),
+        ("EUR", "Euro", eur),
+        ("CNY", "Chinese Yuan", cny),
+    )
+
+    rates = []
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    for code, name, rate in mapping:
+        if rate is None:
+            continue
+        rates.append(
+            {
+                "code": code,
+                "name": name,
+                "current_rate": round(rate, 4),
+                "weekly_change": 0.0,
+                "weekly_change_percent": 0.0,
+                "history": [{"date": today, "rate": round(rate, 4)}],
+            }
+        )
+
+    if not rates:
+        return None
+
+    return {
+        "base": "RUB",
+        "window_days": days,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "source": "sheets_parameters_fallback",
+        "rates": rates,
+    }
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_cors_origins,
-    allow_origin_regex=allow_origin_regex,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -115,70 +168,127 @@ async def calculate(request: CalculatorRequest) -> CalculatorResponse:
 @app.get("/data/materials")
 async def get_materials():
     """Получить список материалов"""
-    materials = reference_data_repo.get_materials()
+    materials = sheets_repo.get_materials()
     return {"data": materials}
 
 
 @app.get("/data/parameters")
 async def get_parameters():
     """Получить параметры (курсы валют)"""
-    parameters = reference_data_repo.get_parameters()
+    parameters = sheets_repo.get_parameters()
     return {"data": parameters}
+
+
+@app.get("/data/currency-rates")
+async def get_currency_rates(days: int = 7):
+    """Получить курсы USD/EUR/CNY к RUB и динамику за период"""
+    if days < 2 or days > 14:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "error": {
+                    "message": "Параметр days должен быть в диапазоне 2..14",
+                    "code": "INVALID_DAYS_RANGE",
+                },
+            },
+        )
+
+    try:
+        rates = currency_repo.get_weekly_rates(days=days)
+        return {"data": rates}
+    except Exception:
+        try:
+            params = sheets_repo.get_parameters()
+            fallback_payload = _build_fallback_currency_payload(params, days)
+            if fallback_payload is not None:
+                return {"data": fallback_payload}
+        except Exception:
+            pass
+
+        empty_payload = {
+            "base": "RUB",
+            "window_days": days,
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "source": "unavailable",
+            "rates": [],
+        }
+        return {"data": empty_payload}
 
 
 @app.get("/data/freight")
 async def get_freight():
     """Получить данные по фрахту"""
-    freight = reference_data_repo.get_freight()
+    freight = sheets_repo.get_freight()
     return {"data": freight}
 
 
 @app.get("/data/customs-fees")
 async def get_customs_fees():
     """Получить таможенные сборы по диапазонам"""
-    fees = reference_data_repo.get_customs_fees()
+    fees = sheets_repo.get_customs_fees()
     return {"data": fees}
 
 
 @app.get("/data/city-port-map")
 async def get_city_port_map():
     """Получить маппинг город → порт"""
-    city_port = reference_data_repo.get_city_port_map()
+    city_port = sheets_repo.get_city_port_map()
     return {"data": city_port}
+
+
+@app.get("/data/china-port-cities")
+async def get_china_port_cities(port: str):
+    """Получить список городов Китая для выбранного китайского порта."""
+    normalized_port = port.strip()
+    if not normalized_port:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "error": {
+                    "message": "Параметр port не должен быть пустым",
+                    "code": "EMPTY_PORT",
+                },
+            },
+        )
+
+    result = sheets_repo.get_china_port_cities_by_port(normalized_port)
+    return {"data": result}
 
 
 @app.get("/data/car-delivery")
 async def get_car_delivery():
     """Получить данные по доставке авто"""
-    delivery = reference_data_repo.get_car_delivery()
+    delivery = sheets_repo.get_car_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/railway-delivery")
 async def get_railway_delivery():
     """Получить данные по доставке ЖД от порта"""
-    delivery = reference_data_repo.get_railway_delivery()
+    delivery = sheets_repo.get_railway_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/railway-car-delivery")
 async def get_railway_car_delivery():
     """Получить данные по доставке ЖД+авто от станции"""
-    delivery = reference_data_repo.get_railway_car_delivery()
+    delivery = sheets_repo.get_railway_car_delivery()
     return {"data": delivery}
 
 
 @app.get("/data/all")
 async def get_all_data():
     """Получить все справочные данные"""
-    data = reference_data_repo.get_all_data()
+    data = sheets_repo.get_all_data()
     return {"data": data}
 
 
 @app.post("/cache/invalidate")
 async def invalidate_cache(sheet_name: str = None):
     """Очистить кэш для листа или всех листов"""
-    reference_data_repo.invalidate_cache(sheet_name)
+    sheets_repo.invalidate_cache(sheet_name)
     if sheet_name:
         return {"message": f"Кэш для листа '{sheet_name}' очищен"}
     return {"message": "Кэш всех листов очищен"}

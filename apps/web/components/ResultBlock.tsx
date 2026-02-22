@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Paper, Typography, Box, Grid, Divider, Button } from "@mui/material";
+import { Paper, Typography, Box, Grid, Divider, Button, TextField } from "@mui/material";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import type { CalculatorResponse } from "@/lib/api";
 
@@ -11,8 +11,6 @@ interface ResultBlockProps {
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-
-const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
 const asNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -72,48 +70,27 @@ const formatPrice = (value: number | null) => {
   })} ¥/кг`;
 };
 
+const formatPercent = (value: number | null) => {
+  if (value === null) {
+    return "-";
+  }
+
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+};
+
 type StepRow = {
   key: string;
   label: string;
   value: string;
 };
 
-const copyWithExecCommand = (text: string) => {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.top = "-1000px";
-  textarea.style.opacity = "0";
-
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  textarea.setSelectionRange(0, text.length);
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-
-  if (!copied) {
-    throw new Error("Не удалось скопировать текст");
-  }
-};
-
-const writeToClipboard = async (text: string) => {
-  if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  if (typeof document !== "undefined") {
-    copyWithExecCommand(text);
-    return;
-  }
-
-  throw new Error("Clipboard API недоступен");
-};
-
 export function ResultBlock({ calculation }: ResultBlockProps) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [sellPricePerKg, setSellPricePerKg] = useState<string>("");
 
   if (!calculation) {
     return (
@@ -143,7 +120,6 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
   const rawData = asRecord(calculation.raw_data);
   const input = asRecord(rawData.input);
   const intermediate = asRecord(rawData.intermediate);
-  const chinaPortInfo = asRecord(rawData.china_port_info);
   const result = asRecord(rawData.result);
 
   const material = asText(input.material);
@@ -206,15 +182,15 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
 
   const totalCostText = formatMoney(totalCost);
   const costPerKgText = costPerKg !== null ? `${formatMoney(costPerKg)} / кг` : "-";
-
-  const matchedChinaPort = asText(chinaPortInfo.matched_port);
-  const chinaPortRegions = asArray(chinaPortInfo.regions)
-    .map((item) => asRecord(item))
-    .map((item) => ({
-      name: asText(item.name),
-      cities: asArray(item.cities).map((city) => asText(city)).filter((city) => city !== "-"),
-    }))
-    .filter((item) => item.name !== "-" && item.cities.length > 0);
+  const sellPriceNumber = asNumber(sellPricePerKg);
+  const marginPerKg =
+    sellPriceNumber !== null && costPerKg !== null ? sellPriceNumber - costPerKg : null;
+  const marginPercent =
+    marginPerKg !== null && costPerKg !== null && costPerKg !== 0
+      ? (marginPerKg / costPerKg) * 100
+      : null;
+  const totalMargin =
+    marginPerKg !== null && quantity !== null ? marginPerKg * quantity : null;
 
   const copyPayload = [
     "Результат расчёта",
@@ -227,22 +203,13 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
       ? stepRows.map((row, index) => `${index + 1}. ${row.label}: ${row.value}`)
       : ["Для этого калькулятора детальные этапы пока не доступны."]),
     "",
-    "Города по китайскому порту:",
-    `Выбранный порт: "${matchedChinaPort}"`,
-    ...(chinaPortRegions.length > 0
-      ? chinaPortRegions.flatMap((region, index) => [
-          `${index + 1}. Регион: ${region.name}`,
-          `   Ближайшие города: ${region.cities.join(", ")}`,
-        ])
-      : ["Данные по выбранному порту не найдены."]),
-    "",
     `Полная себестоимость: ${totalCostText}`,
     `Себестоимость за 1 кг: ${costPerKgText}`,
   ].join("\n");
 
   const handleCopy = async () => {
     try {
-      await writeToClipboard(copyPayload);
+      await navigator.clipboard.writeText(copyPayload);
       setCopyStatus("copied");
     } catch (error) {
       console.error("Не удалось скопировать результат:", error);
@@ -313,43 +280,6 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
       </Typography>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12 }}>
-          <Box
-            sx={{
-              p: 2,
-              borderRadius: 2.5,
-              border: "1px solid rgba(190,210,235,0.24)",
-              backgroundColor: "rgba(140,176,232,0.06)",
-            }}
-          >
-            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>
-              Города по китайскому порту
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Выбранный порт: <strong>"{matchedChinaPort}"</strong>
-            </Typography>
-
-            {chinaPortRegions.length > 0 ? (
-              <Box sx={{ display: "grid", gap: 1.4 }}>
-                {chinaPortRegions.map((region) => (
-                  <Box key={region.name}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Регион: {region.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Ближайшие города: {region.cities.join(", ")}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Данные по выбранному порту не найдены в листе china_port_final.
-              </Typography>
-            )}
-          </Box>
-        </Grid>
-
         <Grid size={{ xs: 12 }}>
           <Box
             sx={{
@@ -487,6 +417,69 @@ export function ResultBlock({ calculation }: ResultBlockProps) {
                   }}
                 >
                   {costPerKgText}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 2.5,
+              border: "1px solid rgba(190,210,235,0.24)",
+              backgroundColor: "rgba(140,176,232,0.06)",
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ mb: 1.2, fontWeight: 600 }}>
+              Оценка маржи
+            </Typography>
+
+            <TextField
+              value={sellPricePerKg}
+              onChange={(event) => setSellPricePerKg(event.target.value)}
+              type="number"
+              fullWidth
+              label="Цена продажи за 1 кг (RUB)"
+              InputProps={{
+                inputProps: { step: 0.01, min: 0 },
+              }}
+              helperText="Укажите плановую цену продажи, чтобы увидеть маржинальность"
+            />
+
+            <Box
+              sx={{
+                mt: 1.5,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+                gap: 1.2,
+              }}
+            >
+              <Box sx={{ p: 1.2, borderRadius: 1.6, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <Typography variant="caption" color="text.secondary">
+                  Маржа за 1 кг
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.2 }}>
+                  {formatMoney(marginPerKg)}
+                </Typography>
+              </Box>
+
+              <Box sx={{ p: 1.2, borderRadius: 1.6, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <Typography variant="caption" color="text.secondary">
+                  Маржинальность
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.2 }}>
+                  {formatPercent(marginPercent)}
+                </Typography>
+              </Box>
+
+              <Box sx={{ p: 1.2, borderRadius: 1.6, backgroundColor: "rgba(255,255,255,0.04)" }}>
+                <Typography variant="caption" color="text.secondary">
+                  Общая маржа
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.2 }}>
+                  {formatMoney(totalMargin)}
                 </Typography>
               </Box>
             </Box>

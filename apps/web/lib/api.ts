@@ -1,56 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
-
-const RETRYABLE_API_STATUSES = new Set([404, 502, 503, 504]);
-
-function getApiBaseCandidates(): string[] {
-  const candidates = [
-    API_BASE_URL,
-    "/api",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8010",
-    "http://localhost:8010",
-  ];
-
-  return Array.from(new Set(candidates.map((item) => item.trim()).filter(Boolean))).map((base) =>
-    base.endsWith("/") ? base.slice(0, -1) : base,
-  );
-}
-
-async function requestApi(path: string, init?: RequestInit): Promise<Response> {
-  const bases = getApiBaseCandidates();
-  let lastError: Error | null = null;
-
-  for (let index = 0; index < bases.length; index += 1) {
-    const base = bases[index]!;
-    const url = `${base}${path}`;
-
-    try {
-      const response = await fetch(url, init);
-
-      if (response.ok) {
-        return response;
-      }
-
-      const canRetry =
-        index < bases.length - 1 && RETRYABLE_API_STATUSES.has(response.status) && (base === "/api" || base === API_BASE_URL);
-
-      if (!canRetry) {
-        throw new Error(`Ошибка API: ${response.status} ${response.statusText}`);
-      }
-
-      lastError = new Error(`Ошибка API: ${response.status} ${response.statusText}`);
-    } catch (error) {
-      if (error instanceof Error) {
-        lastError = error;
-      } else {
-        lastError = new Error("Неизвестная ошибка при запросе к API");
-      }
-    }
-  }
-
-  throw lastError ?? new Error("Не удалось выполнить запрос к API");
-}
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface CalculatorRequest {
   calculator_type: number;
@@ -111,12 +59,6 @@ export interface RailwayCarDeliveryReference {
   price: number;
 }
 
-export interface ChinaPortCityReference {
-  china_port: string;
-  region: string;
-  city_china: string;
-}
-
 export interface ReferenceData {
   materials: MaterialReference[];
   parameters: Record<string, number>;
@@ -126,24 +68,86 @@ export interface ReferenceData {
   car_delivery: CarDeliveryReference[];
   railway_delivery: RailwayDeliveryReference[];
   railway_car_delivery: RailwayCarDeliveryReference[];
-  china_port_cities: ChinaPortCityReference[];
+}
+
+export interface CurrencyRatePoint {
+  date: string;
+  rate: number;
+}
+
+export interface CurrencyRate {
+  code: string;
+  name: string;
+  current_rate: number;
+  weekly_change: number;
+  weekly_change_percent: number;
+  history: CurrencyRatePoint[];
+}
+
+export interface CurrencyRatesData {
+  base: "RUB";
+  window_days: number;
+  generated_at: string;
+  source?: string;
+  rates: CurrencyRate[];
+}
+
+export interface ChinaPortCity {
+  city_en: string;
+  city_ru: string;
+  district: string;
+}
+
+export interface ChinaPortCitiesData {
+  requested_port: string;
+  matched_ports: string[];
+  cities: ChinaPortCity[];
+  total_cities: number;
+}
+
+const NETWORK_ERROR_MESSAGE = `Не удалось подключиться к API (${API_BASE_URL}). Проверьте, что backend запущен.`;
+
+async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, init);
+  } catch {
+    throw new Error(NETWORK_ERROR_MESSAGE);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Ошибка API: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
 }
 
 export async function calculate(request: CalculatorRequest): Promise<CalculatorResponse> {
-  const response = await requestApi("/calculate", {
+  return requestApi<CalculatorResponse>("/calculate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
   });
-
-  return response.json();
 }
 
 export async function getReferenceData(): Promise<ReferenceData> {
-  const response = await requestApi("/data/all");
+  const payload = await requestApi<{ data: ReferenceData }>("/data/all");
+  return payload.data;
+}
 
-  const payload = (await response.json()) as { data: ReferenceData };
+export async function getCurrencyRates(days = 7): Promise<CurrencyRatesData> {
+  const payload = await requestApi<{ data: CurrencyRatesData }>(
+    `/data/currency-rates?days=${days}`,
+  );
+  return payload.data;
+}
+
+export async function getChinaPortCities(port: string): Promise<ChinaPortCitiesData> {
+  const payload = await requestApi<{ data: ChinaPortCitiesData }>(
+    `/data/china-port-cities?port=${encodeURIComponent(port)}`,
+  );
   return payload.data;
 }

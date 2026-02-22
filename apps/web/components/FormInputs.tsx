@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,31 +15,7 @@ import {
 import { CONTAINER_SIZES, CITY_PORT_MAP, MATERIALS, PORTS_FROM } from "@/lib/constants";
 import { getReferenceData, type ReferenceData } from "@/lib/api";
 
-const normalizeText = (value: string) => value.trim().toLowerCase();
-
-const isSameValue = (left: string, right: string) => normalizeText(left) === normalizeText(right);
-
-const includeSelectedOption = (options: string[], selected: string) => {
-  if (!selected) {
-    return options;
-  }
-
-  return options.some((option) => isSameValue(option, selected)) ? options : [selected, ...options];
-};
-
-const getMappedPort = (cityPortMap: Record<string, string>, city: string) => {
-  if (!city) {
-    return "";
-  }
-
-  const exactMatch = cityPortMap[city];
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  const matchedCity = Object.keys(cityPortMap).find((key) => normalizeText(key) === normalizeText(city));
-  return matchedCity ? cityPortMap[matchedCity] ?? "" : "";
-};
+const isSameValue = (left: string, right: string) => left.trim().toLowerCase() === right.trim().toLowerCase();
 
 const normalizeContainer = (container: string): "20ft" | "40ft" | null => {
   const raw = String(container).trim().toLowerCase();
@@ -68,7 +44,6 @@ const optionFilter = createFilterOptions<string>({
 });
 
 interface SearchableSelectFieldProps {
-  id: string;
   label: string;
   value: string;
   options: string[];
@@ -80,7 +55,6 @@ interface SearchableSelectFieldProps {
 }
 
 function SearchableSelectField({
-  id,
   label,
   value,
   options,
@@ -92,14 +66,13 @@ function SearchableSelectField({
 }: SearchableSelectFieldProps) {
   return (
     <Autocomplete
-      id={id}
       options={options}
       value={value || null}
       onChange={(_, nextValue) => onChange(nextValue ?? "")}
       disabled={disabled}
       filterOptions={optionFilter}
       noOptionsText={noOptionsText}
-      isOptionEqualToValue={(option, currentValue) => isSameValue(option, currentValue)}
+      isOptionEqualToValue={(option, currentValue) => option === currentValue}
       renderInput={(params) => (
         <TextField
           {...params}
@@ -154,7 +127,7 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
     setValue,
     reset,
     clearErrors,
-    formState: { errors, isDirty },
+    formState: { errors },
   } = useForm<CalculatorFormData>({
     resolver: zodResolver(calculatorFormSchema),
     defaultValues: defaultFormValues,
@@ -162,26 +135,20 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
 
   const [referenceData, setReferenceData] = useState<ReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
-  const isDirtyRef = useRef(false);
-
-  useEffect(() => {
-    isDirtyRef.current = isDirty;
-  }, [isDirty]);
 
   useEffect(() => {
     let cancelled = false;
 
     getReferenceData()
       .then((data) => {
-        if (cancelled || isDirtyRef.current) {
+        if (cancelled) {
           return;
         }
 
         setReferenceData(data);
         setReferenceError(null);
       })
-      .catch((error) => {
-        console.error("Ошибка загрузки справочников:", error);
+      .catch(() => {
         if (cancelled) {
           return;
         }
@@ -194,39 +161,35 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
   }, []);
 
   const cityTo = watch("city_to");
-  const railwayStation = watch("railway_station") ?? "";
+  const railwayStation = watch("railway_station");
   const containerSize = watch("container_size");
   const portFrom = watch("port_from");
-  const material = watch("material");
 
   const cityPortMap = useMemo<Record<string, string>>(
     () => referenceData?.city_port_map ?? { ...CITY_PORT_MAP },
     [referenceData],
   );
 
-  const cityOptions = useMemo(
-    () => includeSelectedOption(Object.keys(cityPortMap).sort(sortRu), cityTo),
-    [cityPortMap, cityTo],
-  );
+  const cityOptions = useMemo(() => Object.keys(cityPortMap).sort(sortRu), [cityPortMap]);
 
   const materialOptions = useMemo(() => {
-    const options = !referenceData?.materials?.length
-      ? [...MATERIALS]
-      : Array.from(new Set(referenceData.materials.map((item) => item.material).filter(Boolean)));
+    if (!referenceData?.materials?.length) {
+      return [...MATERIALS];
+    }
 
-    return includeSelectedOption(options, material);
-  }, [material, referenceData]);
+    return Array.from(new Set(referenceData.materials.map((item) => item.material).filter(Boolean)));
+  }, [referenceData]);
 
-  const portTo = getMappedPort(cityPortMap, cityTo);
+  const portTo = cityTo ? cityPortMap[cityTo] ?? "" : "";
   const isVladivostokRoute = isSameValue(portTo, "Владивосток");
 
   const stationOptions = useMemo(() => {
     if (!cityTo || !isVladivostokRoute) {
-      return includeSelectedOption([], railwayStation);
+      return [];
     }
 
     if (!referenceData) {
-      return includeSelectedOption([], railwayStation);
+      return [];
     }
 
     const stationsByCity = new Set(
@@ -243,31 +206,23 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         .filter(Boolean),
     );
 
-    if (stationsByCity.size === 0) {
-      const cityMatchedStations = Array.from(stationsByPort).filter((station) => isSameValue(station, cityTo));
-      const fallbackStations = cityMatchedStations.length > 0 ? cityMatchedStations : Array.from(stationsByPort);
-      return includeSelectedOption(fallbackStations.sort(sortRu), railwayStation);
-    }
-
-    const options = Array.from(stationsByCity)
+    return Array.from(stationsByCity)
       .filter((station) => stationsByPort.size === 0 || stationsByPort.has(station))
       .sort(sortRu);
-
-    return includeSelectedOption(options, railwayStation);
-  }, [cityTo, isVladivostokRoute, portTo, railwayStation, referenceData]);
+  }, [cityTo, isVladivostokRoute, portTo, referenceData]);
 
   const containerOptions = useMemo(() => {
     if (!cityTo) {
-      return includeSelectedOption([], containerSize);
+      return [];
     }
 
     if (!referenceData) {
-      return includeSelectedOption([...CONTAINER_SIZES], containerSize);
+      return [...CONTAINER_SIZES];
     }
 
     if (isVladivostokRoute) {
       if (!railwayStation) {
-        return includeSelectedOption([], containerSize);
+        return [];
       }
 
       const railContainers = new Set(
@@ -292,10 +247,7 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
       const intersection = Array.from(railContainers).filter((item) => railCarContainers.has(item));
       const fallbackUnion = Array.from(new Set([...railContainers, ...railCarContainers]));
 
-      return includeSelectedOption(
-        sortContainer(intersection.length > 0 ? intersection : fallbackUnion),
-        containerSize,
-      );
+      return sortContainer(intersection.length > 0 ? intersection : fallbackUnion);
     }
 
     const carContainers = new Set(
@@ -305,19 +257,19 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         .filter((item): item is "20ft" | "40ft" => item !== null),
     );
 
-    return includeSelectedOption(sortContainer(Array.from(carContainers)), containerSize);
-  }, [cityTo, containerSize, isVladivostokRoute, portTo, railwayStation, referenceData]);
+    return sortContainer(Array.from(carContainers));
+  }, [cityTo, isVladivostokRoute, portTo, railwayStation, referenceData]);
 
   const portFromOptions = useMemo(() => {
     if (!cityTo || !portTo || !containerSize) {
-      return includeSelectedOption([], portFrom);
+      return [];
     }
 
     if (!referenceData) {
-      return includeSelectedOption([...PORTS_FROM], portFrom);
+      return [...PORTS_FROM];
     }
 
-    const options = Array.from(
+    return Array.from(
       new Set(
         referenceData.freight
           .filter(
@@ -329,9 +281,7 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
           .filter(Boolean),
       ),
     ).sort(sortRu);
-
-    return includeSelectedOption(options, portFrom);
-  }, [cityTo, containerSize, portFrom, portTo, referenceData]);
+  }, [cityTo, containerSize, portTo, referenceData]);
 
   const stationDisabled = !cityTo || !isVladivostokRoute || stationOptions.length === 0;
   const containerDisabled = !cityTo || (isVladivostokRoute && !railwayStation) || containerOptions.length === 0;
@@ -343,13 +293,10 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
     onReset?.();
   };
 
-  const handleCalculateClick = () => {
-    void handleSubmit(onSubmit)();
-  };
-
   return (
     <Box
-      component="section"
+      component="form"
+      onSubmit={handleSubmit(onSubmit)}
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -363,7 +310,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         control={control}
         render={({ field }) => (
           <SearchableSelectField
-            id="field-city-to"
             label="1. Пункт назначения (город)"
             value={field.value}
             options={cityOptions}
@@ -381,7 +327,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
       />
 
       <TextField
-        id="field-port-to"
         label="Порт назначения (автовыбор)"
         value={portTo || "-"}
         fullWidth
@@ -394,7 +339,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         control={control}
         render={({ field }) => (
           <SearchableSelectField
-            id="field-railway-station"
             label="2. ЖД станция"
             value={field.value ?? ""}
             options={stationOptions}
@@ -424,7 +368,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         control={control}
         render={({ field }) => (
           <SearchableSelectField
-            id="field-container-size"
             label="3. Размер контейнера"
             value={field.value}
             options={containerOptions}
@@ -453,7 +396,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         control={control}
         render={({ field }) => (
           <SearchableSelectField
-            id="field-port-from"
             label="4. Порт отправления (Китай)"
             value={field.value}
             options={portFromOptions}
@@ -476,7 +418,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         control={control}
         render={({ field }) => (
           <SearchableSelectField
-            id="field-material"
             label="5. Материал"
             value={field.value}
             options={materialOptions}
@@ -494,7 +435,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         render={({ field }) => (
           <TextField
             {...field}
-            id="field-quantity"
             value={field.value === 0 ? "" : field.value}
             type="number"
             label="6. Количество"
@@ -516,7 +456,6 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
         render={({ field }) => (
           <TextField
             {...field}
-            id="field-price-per-kg"
             value={field.value === 0 ? "" : field.value}
             type="number"
             label="7. Цена за кг (CNY)"
@@ -544,12 +483,11 @@ export function FormInputs({ onSubmit, loading = false, onReset }: FormInputsPro
           Сбросить
         </Button>
         <Button
-          type="button"
+          type="submit"
           variant="contained"
           fullWidth
           size="large"
           disabled={loading}
-          onClick={handleCalculateClick}
         >
           {loading ? "Расчёт..." : "Рассчитать"}
         </Button>
