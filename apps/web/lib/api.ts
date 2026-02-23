@@ -1,4 +1,13 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function normalizeBasePath(value: string | undefined): string {
+  if (!value || value === "/") {
+    return "";
+  }
+
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+const BASE_PATH = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || `${BASE_PATH}/api`;
 
 export interface CalculatorRequest {
   calculator_type: number;

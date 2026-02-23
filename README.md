@@ -32,6 +32,13 @@
    docker-compose up --build
    ```
 
+   Для размещения фронтенда в подпути (например, `https://polygonplast.ru/calculator`) задайте переменные окружения перед запуском:
+   ```bash
+   export NEXT_PUBLIC_BASE_PATH=/calculator
+   export NEXT_PUBLIC_API_URL=/calculator/api
+   docker compose up -d --build
+   ```
+
 4. Для локальной разработки с hot-reload используйте отдельный compose-файл:
    ```bash
    docker compose -f docker-compose.dev.yml up --build
