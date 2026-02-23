@@ -100,6 +100,8 @@
    - `https://polygonplast.ru/calculator`
    - `https://polygonplast.ru/calculator/api/health`
 
+Готовый набор серверных команд: `deploy/SERVER_RUNBOOK.md`.
+
 ## Разработка
 
 ### Frontend
