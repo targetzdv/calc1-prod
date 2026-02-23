@@ -1,0 +1,9 @@
+services:
+  web:
+    environment:
+      - NEXT_PUBLIC_BASE_PATH=/calculator
+      - NEXT_PUBLIC_API_URL=/calculator/api
+
+  api:
+    volumes:
+      - ${GOOGLE_CREDENTIALS_FILE:-./apps/api/credentials.json}:/app/credentials.json:ro
