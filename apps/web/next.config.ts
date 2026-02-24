@@ -13,7 +13,9 @@ const basePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
 const nextConfig: NextConfig = {
   ...(basePath ? { basePath } : {}),
   async rewrites() {
-    const apiTarget = process.env.API_PROXY_TARGET || "http://127.0.0.1:8000";
+    const defaultApiTarget =
+      process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "http://api:8000";
+    const apiTarget = process.env.API_PROXY_TARGET || defaultApiTarget;
 
     return [
       {

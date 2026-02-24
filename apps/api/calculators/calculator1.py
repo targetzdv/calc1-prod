@@ -9,6 +9,16 @@ def format_number(value: float, decimals: int = 2) -> str:
     return f"{value:,.{decimals}f}"
 
 
+def to_float(value: Optional[float]) -> float:
+    """Безопасное приведение к float для значений из справочников."""
+    try:
+        if value is None:
+            return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def get_china_port_info(selected_port: str, port_cities: list[dict]) -> dict:
     """Собирает регионы и города по выбранному китайскому порту.
 
@@ -119,7 +129,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
             }
         )
 
-    freight_usd = freight['freight_usd']
+    freight_usd = to_float(freight.get('freight_usd'))
 
     # === 2. Финансовые расчёты ===
 
@@ -179,7 +189,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
                 delivery_rub = 0.0
                 delivery_type = f"Авто (не найден маршрут {port_to} → {request.city_to})"
             else:
-                delivery_rub = delivery['price']
+                delivery_rub = to_float(delivery.get('price'))
                 delivery_type = "Авто"
     else:  # Владивосток → ЖД
         railway_delivery = all_data['railway_delivery']
@@ -203,8 +213,8 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
                 None
             )
 
-            railway_rub = railway['price'] if railway else 0.0
-            railway_car_rub = railway_car['price'] if railway_car else 0.0
+            railway_rub = to_float(railway.get('price')) if railway else 0.0
+            railway_car_rub = to_float(railway_car.get('price')) if railway_car else 0.0
             delivery_rub = railway_rub + railway_car_rub
             delivery_type = "ЖД"
             railway_station_used = station
@@ -221,7 +231,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
             railway_rub = 0.0
             railway_car_rub = 0.0
             if railway:
-                delivery_rub = railway['price']
+                delivery_rub = to_float(railway.get('price'))
                 delivery_type = "ЖД"
             else:
                 delivery_rub = 0.0
