@@ -1,6 +1,7 @@
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, status
@@ -38,6 +39,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _safe_float(value):
     try:
@@ -54,6 +57,74 @@ def _find_rate(params: dict, aliases: tuple[str, ...]):
         if value is not None and value > 0:
             return value
     return None
+
+
+def _normalize_calculator2_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(payload) if isinstance(payload, dict) else {}
+    values = normalized.get("values")
+
+    if isinstance(values, dict):
+        normalized["values"] = dict(values)
+        return normalized
+
+    normalized["values"] = {
+        key: value for key, value in normalized.items() if key != "currency_rate_date"
+    }
+    return normalized
+
+
+def _extract_latest_cny_rate(currency_payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    rates = currency_payload.get("rates")
+    if not isinstance(rates, list):
+        return None
+
+    for item in rates:
+        if not isinstance(item, dict) or item.get("code") != "CNY":
+            continue
+
+        current_rate = _safe_float(item.get("current_rate"))
+        if current_rate is None or current_rate <= 0:
+            continue
+
+        rate_date = None
+        history = item.get("history")
+        if isinstance(history, list) and history:
+            latest_point = history[-1]
+            if isinstance(latest_point, dict):
+                raw_date = latest_point.get("date")
+                if isinstance(raw_date, str) and raw_date.strip():
+                    rate_date = raw_date.strip()
+
+        return {
+            "rate": current_rate,
+            "date": rate_date,
+        }
+
+    return None
+
+
+def _get_calculator2_payload() -> Dict[str, Any]:
+    payload = _normalize_calculator2_payload(reference_data_repo.get_calculator2_parameters())
+
+    try:
+        currency_payload = currency_repo.get_weekly_rates(days=7)
+        latest_cny = _extract_latest_cny_rate(currency_payload)
+    except Exception:
+        logger.warning("CBR request failed for Calculator 2 config, using reference data rate")
+        latest_cny = None
+
+    if latest_cny is None:
+        return payload
+
+    values = payload.setdefault("values", {})
+    values["course_cny_to_rub"] = latest_cny["rate"]
+    values.pop("exchange_rate_cny_to_rub_adjusted", None)
+    values.pop("course_cny_to_rub_adjusted", None)
+
+    if latest_cny.get("date"):
+        payload["currency_rate_date"] = latest_cny["date"]
+
+    return payload
 
 
 def _build_fallback_currency_payload(params: dict, days: int):
@@ -191,7 +262,7 @@ async def calculate(request: CalculatorRequest) -> CalculatorResponse:
 @app.post("/calculate/calc-2", response_model=Calculator2Response, status_code=status.HTTP_200_OK)
 async def calculate_calc_2(request: Calculator2Request) -> Calculator2Response:
     try:
-        payload = reference_data_repo.get_calculator2_parameters()
+        payload = _get_calculator2_payload()
         return calculate_calc2(request, payload)
     except Calculator2ValidationError as error:
         raise HTTPException(
@@ -224,7 +295,7 @@ async def get_parameters():
 @app.get("/data/calculator2-config")
 async def get_calculator2_config():
     try:
-        payload = reference_data_repo.get_calculator2_parameters()
+        payload = _get_calculator2_payload()
         return {"data": build_calculator2_config_payload(payload)}
     except Calculator2ConfigError as error:
         raise HTTPException(
