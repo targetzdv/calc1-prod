@@ -20,6 +20,7 @@ import { ResultBlock } from "./ResultBlock";
 import { FormInputs, type CalculatorFormData } from "./FormInputs";
 import { CurrencyRatesCard } from "./CurrencyRatesCard";
 import { ChinaPortCitiesCard } from "./ChinaPortCitiesCard";
+import { Calculator2Screen } from "./calculator2/Calculator2Screen";
 import {
   calculate,
   getChinaPortCities,
@@ -80,6 +81,7 @@ export function Calculator() {
     setCalculation(null);
     setChinaPortData(null);
     setChinaPortError(null);
+    setError(null);
   };
 
   const getCalculatorTitle = () => {
@@ -87,11 +89,24 @@ export function Calculator() {
       case 1:
         return "Калькулятор 1 — Себестоимость поставки";
       case 2:
-        return "Калькулятор 2 — какое-то название";
+        return "Калькулятор 2 — ИП Шмаков";
       case 3:
         return "Калькулятор 3 — какое-то название";
       default:
         return "Калькулятор";
+    }
+  };
+
+  const getCalculatorDescription = () => {
+    switch (activeTab) {
+      case 1:
+        return "Пошаговый расчёт поставки в контейнерах с каскадной фильтрацией и динамическими справочниками.";
+      case 2:
+        return "Расчёт доставки образцов до 100 кг через ИП Шмаков с отдельной формой, курсом CNY→RUB и НДС 22%.";
+      case 3:
+        return "Третий сценарий оставлен как отдельная вкладка и пока ещё не реализован.";
+      default:
+        return "Калькулятор себестоимости.";
     }
   };
 
@@ -207,7 +222,7 @@ export function Calculator() {
               {getCalculatorTitle()}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Пошаговый расчёт поставки в контейнерах с каскадной фильтрацией и динамическими справочниками.
+              {getCalculatorDescription()}
             </Typography>
           </Box>
 
@@ -215,32 +230,56 @@ export function Calculator() {
             <CalculatorTabs value={activeTab} onChange={handleTabChange} />
           </Paper>
 
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, minHeight: 300 }}>
-                <Typography variant="h6" gutterBottom>
-                  Исходные данные
-                </Typography>
-                <FormInputs
-                  onSubmit={handleFormSubmit}
-                  loading={loading}
-                  onReset={handleReset}
+          {activeTab === 1 ? (
+            <>
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, minHeight: 300 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Исходные данные
+                    </Typography>
+                    <FormInputs
+                      onSubmit={handleFormSubmit}
+                      loading={loading}
+                      onReset={handleReset}
+                    />
+                  </Paper>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <ResultBlock calculation={calculation} />
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3 }}>
+                <ChinaPortCitiesCard
+                  data={chinaPortData}
+                  loading={chinaPortLoading}
+                  error={chinaPortError}
                 />
-              </Paper>
-            </Grid>
+              </Box>
+            </>
+          ) : null}
 
-            <Grid size={{ xs: 12, md: 6 }}>
-              <ResultBlock calculation={calculation} />
-            </Grid>
-          </Grid>
+          {activeTab === 2 ? <Calculator2Screen /> : null}
 
-          <Box sx={{ mt: 3 }}>
-            <ChinaPortCitiesCard
-              data={chinaPortData}
-              loading={chinaPortLoading}
-              error={chinaPortError}
-            />
-          </Box>
+          {activeTab === 3 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 2.4, md: 3 },
+                border: "1px dashed rgba(142,184,255,0.42)",
+                backgroundColor: "rgba(142,184,255,0.06)",
+              }}
+            >
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Калькулятор 3 в работе
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Третью вкладку пока оставил изолированной, без общей формы Calculator 1, чтобы не смешивать контракты.
+              </Typography>
+            </Paper>
+          ) : null}
         </Box>
 
         <Box sx={{ minWidth: 0, order: { xs: 2, lg: 2 } }}>

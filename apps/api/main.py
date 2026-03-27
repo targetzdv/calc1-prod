@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, status
@@ -18,9 +19,18 @@ else:
 
 from models.CalculatorRequest import CalculatorRequest
 from models.CalculatorResponse import CalculatorResponse
+from models.Calculator2Request import Calculator2Request
+from models.Calculator2Response import Calculator2Response
 from calculators import CALCULATORS
 from repositories.sheets_repo import sheets_repo
 from repositories.currency_repo import currency_repo
+from repositories.data_repo import reference_data_repo
+from calculators.calculator2 import (
+    Calculator2ConfigError,
+    Calculator2ValidationError,
+    build_calculator2_config_payload,
+    calculate_calc2,
+)
 
 app = FastAPI(
     title="Calculator API",
@@ -84,6 +94,21 @@ def _build_fallback_currency_payload(params: dict, days: int):
         "source": "sheets_parameters_fallback",
         "rates": rates,
     }
+
+
+def _error_payload(message: str, code: str, field: Optional[str] = None):
+    payload = {
+        "success": False,
+        "error": {
+            "message": message,
+            "code": code,
+        },
+    }
+
+    if field:
+        payload["error"]["details"] = [{"field": field, "message": message}]
+
+    return payload
 
 # CORS middleware
 app.add_middleware(
@@ -163,6 +188,23 @@ async def calculate(request: CalculatorRequest) -> CalculatorResponse:
     return calculator(request)
 
 
+@app.post("/calculate/calc-2", response_model=Calculator2Response, status_code=status.HTTP_200_OK)
+async def calculate_calc_2(request: Calculator2Request) -> Calculator2Response:
+    try:
+        payload = reference_data_repo.get_calculator2_parameters()
+        return calculate_calc2(request, payload)
+    except Calculator2ValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_payload(error.message, error.code, error.field),
+        ) from error
+    except Calculator2ConfigError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error_payload(error.message, error.code),
+        ) from error
+
+
 # === Эндпоинты для справочных данных ===
 
 @app.get("/data/materials")
@@ -177,6 +219,18 @@ async def get_parameters():
     """Получить параметры (курсы валют)"""
     parameters = sheets_repo.get_parameters()
     return {"data": parameters}
+
+
+@app.get("/data/calculator2-config")
+async def get_calculator2_config():
+    try:
+        payload = reference_data_repo.get_calculator2_parameters()
+        return {"data": build_calculator2_config_payload(payload)}
+    except Calculator2ConfigError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error_payload(error.message, error.code),
+        ) from error
 
 
 @app.get("/data/currency-rates")

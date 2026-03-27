@@ -21,6 +21,22 @@
     "nds_percent": 22.0,
     "bank_commission_percent": 2.5
   },
+  "calculator2_parameters": {
+    "values": {
+      "course_cny_to_rub": 11.05133,
+      "intl_delivery_usd_per_kg": 3.5,
+      "usd_to_cny_rate": 7.2,
+      "supplier_coefficient": 1.26,
+      "supplier_vat_divisor": 1.05,
+      "our_vat_multiplier": 1.22,
+      "packing_cny_per_kg": 2.0,
+      "packing_min_cny": 50.0,
+      "mo_delivery_cny": 600.0,
+      "max_weight_kg": 100.0,
+      "rate_markup_percent": 5.0
+    },
+    "currency_rate_date": "2026-03-27"
+  },
   "freight": [
     {"point_a": "Dalian", "point_b": "Новороссийск", "container": "20", "freight_usd": 4000.0},
     {"point_a": "Dalian", "point_b": "Новороссийск", "container": "40", "freight_usd": 5900.0},

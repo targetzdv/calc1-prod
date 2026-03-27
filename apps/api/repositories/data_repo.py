@@ -63,6 +63,9 @@ class LocalDataRepository:
     def get_all_data(self) -> Dict[str, Any]:
         return self._load_data()
 
+    def get_calculator2_parameters(self) -> Dict[str, Any]:
+        return self._load_data().get("calculator2_parameters", {})
+
 
 class ReferenceDataRepository:
     """Facade over sheets/local sources."""
@@ -134,6 +137,9 @@ class ReferenceDataRepository:
 
     def get_all_data(self) -> Dict[str, Any]:
         return self._call("get_all_data")
+
+    def get_calculator2_parameters(self) -> Dict[str, Any]:
+        return self._call("get_calculator2_parameters")
 
 
 reference_data_repo = ReferenceDataRepository()

@@ -116,6 +116,22 @@ class SheetsRepository:
             return ""
         return " ".join(value.strip().lower().split())
 
+    def _parse_bool(self, value: Any) -> Optional[bool]:
+        if value is None:
+            return None
+
+        normalized = str(value).strip().lower()
+        if not normalized:
+            return None
+
+        if normalized in {"true", "1", "yes", "y", "да"}:
+            return True
+
+        if normalized in {"false", "0", "no", "n", "нет"}:
+            return False
+
+        return None
+
     def _split_bilingual_city(self, value: str) -> tuple[str, str]:
         """Пробуем извлечь EN/RU названия из одной строки."""
         raw = value.strip()
@@ -271,6 +287,69 @@ class SheetsRepository:
                     params[param_name] = param_value
 
         return params
+
+    def get_calculator2_parameters(self) -> Dict[str, Any]:
+        """Получить параметры Calculator 2."""
+        try:
+            values = self._get_data_with_cache('calculator2_parameters')
+
+            if not values:
+                return {}
+
+            headers = [self._normalize_header(cell) for cell in values[0]]
+            key_index = next((index for index, header in enumerate(headers) if header == "key"), None)
+            value_index = next((index for index, header in enumerate(headers) if header == "value"), None)
+            is_active_index = next((index for index, header in enumerate(headers) if header == "isactive"), None)
+            updated_at_index = next((index for index, header in enumerate(headers) if header == "updatedat"), None)
+
+            if key_index is None or value_index is None:
+                return {}
+
+            params: Dict[str, float] = {}
+            updated_at_map: Dict[str, str] = {}
+
+            for row in values[1:]:
+                if len(row) <= max(key_index, value_index):
+                    continue
+
+                key = row[key_index].strip().lower()
+                if not key:
+                    continue
+
+                if is_active_index is not None and len(row) > is_active_index:
+                    is_active = self._parse_bool(row[is_active_index])
+                    if is_active is False:
+                        continue
+
+                raw_value = row[value_index]
+                parsed_value = self._parse_number(raw_value, is_percentage=False)
+                if parsed_value is None:
+                    continue
+
+                params[key] = parsed_value
+
+                if updated_at_index is not None and len(row) > updated_at_index:
+                    updated_at = row[updated_at_index].strip()
+                    if updated_at:
+                        updated_at_map[key] = updated_at
+
+            rate_date = (
+                updated_at_map.get("course_cny_to_rub")
+                or updated_at_map.get("exchange_rate_cny_to_rub_adjusted")
+                or next(iter(updated_at_map.values()), None)
+            )
+
+            return {
+                "values": params,
+                "currency_rate_date": rate_date,
+            }
+        except Exception:
+            logger.warning("Google Sheets request failed for calculator2_parameters, using local fallback")
+            fallback = self._load_local_reference_data()
+            calculator2_parameters = fallback.get("calculator2_parameters", {})
+            if isinstance(calculator2_parameters, dict):
+                return calculator2_parameters
+            return {}
 
     def get_freight(self) -> List[Dict[str, Any]]:
         """Получить данные по фрахту"""
