@@ -41,6 +41,19 @@ app = FastAPI(
 
 logger = logging.getLogger(__name__)
 
+CALCULATOR2_SANITY_LIMITS = {
+    "intl_delivery_usd_per_kg": (0.0, 100.0),
+    "usd_to_cny_rate": (0.0, 20.0),
+    "supplier_coefficient": (0.0, 10.0),
+    "supplier_vat_divisor": (1.0, 10.0),
+    "our_vat_multiplier": (1.0, 10.0),
+    "packing_cny_per_kg": (0.0, 100.0),
+    "packing_min_cny": (0.0, 10000.0),
+    "mo_delivery_cny": (0.0, 100000.0),
+    "max_weight_kg": (0.0, 1000.0),
+    "rate_markup_percent": (0.0, 100.0),
+}
+
 
 def _safe_float(value):
     try:
@@ -70,6 +83,38 @@ def _normalize_calculator2_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalized["values"] = {
         key: value for key, value in normalized.items() if key != "currency_rate_date"
     }
+    return normalized
+
+
+def _merge_calculator2_fallback_values(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = _normalize_calculator2_payload(payload)
+    fallback_payload = _normalize_calculator2_payload(
+        reference_data_repo.local_repo.get_calculator2_parameters()
+    )
+
+    values = normalized.setdefault("values", {})
+    fallback_values = fallback_payload.get("values", {})
+
+    for key, (min_value, max_value) in CALCULATOR2_SANITY_LIMITS.items():
+        current_value = _safe_float(values.get(key))
+        if current_value is not None and min_value < current_value <= max_value:
+            continue
+
+        fallback_value = _safe_float(fallback_values.get(key))
+        if fallback_value is None:
+            continue
+
+        logger.warning(
+            "Calculator 2 parameter '%s' is missing or out of bounds (%s), using local fallback '%s'",
+            key,
+            current_value,
+            fallback_value,
+        )
+        values[key] = fallback_value
+
+    if not normalized.get("currency_rate_date") and fallback_payload.get("currency_rate_date"):
+        normalized["currency_rate_date"] = fallback_payload["currency_rate_date"]
+
     return normalized
 
 
@@ -104,7 +149,7 @@ def _extract_latest_cny_rate(currency_payload: Dict[str, Any]) -> Optional[Dict[
 
 
 def _get_calculator2_payload() -> Dict[str, Any]:
-    payload = _normalize_calculator2_payload(reference_data_repo.get_calculator2_parameters())
+    payload = _merge_calculator2_fallback_values(reference_data_repo.get_calculator2_parameters())
 
     try:
         currency_payload = currency_repo.get_weekly_rates(days=7)
