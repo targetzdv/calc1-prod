@@ -66,41 +66,35 @@
 - `docker-compose.yml` - production режим (без Next.js HMR и без `uvicorn --reload`)
 - `docker-compose.dev.yml` - development режим (с HMR/auto-reload)
 
-## Deploy to polygonplast.ru/calculator
+## Deploy to calculator.polygonplast.ru
 
 1. Скопируйте шаблон переменных и заполните его:
    ```bash
    cp deploy/env/.env.prod.example .env
    ```
 
-2. Проверьте, что в `.env` корректно заданы:
-   - `NEXT_PUBLIC_BASE_PATH=/calculator`
-   - `NEXT_PUBLIC_API_URL=/calculator/api`
+2. Для текущего production-сценария на поддомене проверьте, что в `.env` корректно заданы:
+   - `NEXT_PUBLIC_BASE_PATH=`
+   - `NEXT_PUBLIC_API_URL=/api`
    - `WEB_BIND_HOST=127.0.0.1`
    - `API_BIND_HOST=127.0.0.1`
    - `REDIS_BIND_HOST=127.0.0.1`
-   - `GOOGLE_CREDENTIALS_FILE=/absolute/path/to/credentials.json`
+   - `GOOGLE_CREDENTIALS_FILE=/opt/calc1-prod/secrets/credentials.json`
    - `GOOGLE_SHEET_ID=...`
+   - `API_PROXY_TARGET=http://api:8000`
 
-3. Запустите production-стек:
+3. Перед первым production-build убедитесь, что на сервере есть swap. Подробный порядок описан в `deploy/SERVER_RUNBOOK.md`.
+
+4. Запустите production-стек:
    ```bash
    ./scripts/deploy-prod.sh
    ```
 
-4. В конфиге Nginx домена `polygonplast.ru` добавьте блоки из файла:
-   - `deploy/nginx/polygonplast.ru.calculator.conf`
+5. Проверки после деплоя:
+   - `https://calculator.polygonplast.ru/`
+   - `https://calculator.polygonplast.ru/api/health`
 
-5. Проверьте конфиг и перезагрузите Nginx:
-   ```bash
-   sudo nginx -t
-   sudo systemctl reload nginx
-   ```
-
-6. Проверки после деплоя:
-   - `https://polygonplast.ru/calculator`
-   - `https://polygonplast.ru/calculator/api/health`
-
-Готовый набор серверных команд: `deploy/SERVER_RUNBOOK.md`.
+Актуальный runbook с безопасным порядком релиза, rollback и примечанием по `Calculator 2` и Google Sheets: `deploy/SERVER_RUNBOOK.md`.
 
 ## Разработка
 
