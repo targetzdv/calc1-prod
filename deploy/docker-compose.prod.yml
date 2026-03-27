@@ -3,6 +3,7 @@ services:
     environment:
       - NEXT_PUBLIC_BASE_PATH=/calculator
       - NEXT_PUBLIC_API_URL=/calculator/api
+      - NEXT_PUBLIC_YANDEX_METRIKA_ID=${NEXT_PUBLIC_YANDEX_METRIKA_ID:-}
 
   api:
     volumes:

@@ -33,9 +33,35 @@ fi
 echo "[INFO] Building and starting containers..."
 docker compose "${COMPOSE_ARGS[@]}" up -d --build
 
+wait_for_http() {
+  local url="$1"
+  local retries="${2:-20}"
+  local delay_seconds="${3:-2}"
+
+  for ((attempt = 1; attempt <= retries; attempt++)); do
+    if curl -fsS "${url}" >/dev/null; then
+      return 0
+    fi
+    sleep "${delay_seconds}"
+  done
+
+  return 1
+}
+
 echo "[INFO] Running health checks..."
-curl -fsS http://127.0.0.1:8000/health >/dev/null
-echo "[OK] API health check passed"
+if wait_for_http "http://127.0.0.1:8000/health" 30 2; then
+  echo "[OK] API health check passed"
+else
+  echo "[ERROR] API health check failed: http://127.0.0.1:8000/health"
+  exit 1
+fi
+
+if wait_for_http "http://127.0.0.1:3000${NEXT_PUBLIC_BASE_PATH:-}/" 30 2; then
+  echo "[OK] WEB health check passed"
+else
+  echo "[ERROR] WEB health check failed: http://127.0.0.1:3000${NEXT_PUBLIC_BASE_PATH:-}/"
+  exit 1
+fi
 
 echo "[INFO] Service status:"
 docker compose "${COMPOSE_ARGS[@]}" ps

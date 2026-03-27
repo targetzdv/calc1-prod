@@ -235,6 +235,7 @@ def calculate(request: CalculatorRequest) -> CalculatorResponse:
                 delivery_type = "ЖД"
             else:
                 delivery_rub = 0.0
+                delivery_type = f"ЖД (не найден маршрут {port_to} → {request.city_to})"
             railway_station_used = request.city_to
 
     # 10. Банковская комиссия (RUB)
