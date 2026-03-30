@@ -87,11 +87,11 @@ export function Calculator() {
   const getCalculatorTitle = () => {
     switch (activeTab) {
       case 1:
-        return "Калькулятор 1 — Себестоимость поставки";
+        return "Контейнер на поставку";
       case 2:
-        return "Калькулятор 2 — ИП Шмаков";
+        return "Образец";
       case 3:
-        return "Калькулятор 3 — какое-то название";
+        return "Сборный контейнер";
       default:
         return "Калькулятор";
     }
@@ -104,7 +104,7 @@ export function Calculator() {
       case 2:
         return "Расчёт доставки образцов до 100 кг через ИП Шмаков с отдельной формой, курсом CNY→RUB и НДС 22%.";
       case 3:
-        return "Третий сценарий оставлен как отдельная вкладка и пока ещё не реализован.";
+        return "Сценарий сборного контейнера оставлен отдельной вкладкой и пока ещё не реализован.";
       default:
         return "Калькулятор себестоимости.";
     }
@@ -273,10 +273,10 @@ export function Calculator() {
               }}
             >
               <Typography variant="h6" sx={{ mb: 1 }}>
-                Калькулятор 3 в работе
+                Сборный контейнер в работе
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Третью вкладку пока оставил изолированной, без общей формы Calculator 1, чтобы не смешивать контракты.
+                Сценарий пока оставлен изолированным, без общей формы Calculator 1, чтобы не смешивать контракты.
               </Typography>
             </Paper>
           ) : null}
